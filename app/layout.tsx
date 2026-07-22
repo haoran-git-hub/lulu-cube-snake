@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "噜噜立方体贪吃蛇",
-  description: "一款可以跨越六面立方体地图的 3D 贪吃蛇网页游戏。",
+  title: "贪吃噜",
+  description: "和噜噜一起在立方体地图上吃橘子、躲障碍、挑战最高分。",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

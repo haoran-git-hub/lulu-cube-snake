@@ -1,32 +1,34 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "噜噜立方体贪吃蛇",
-  description: "在六面立方体上探索、吃橘子、躲避障碍，并挑战自己的最高分。",
+  title: "贪吃噜",
+  description: "和噜噜一起在立方体地图上吃橘子、躲障碍、挑战最高分。",
 };
 
 export default function Home() {
   return (
-    <main className="site-shell">
-      <header className="site-header">
-        <div>
-          <p className="eyebrow">LULU CUBE SNAKE</p>
-          <h1>噜噜立方体贪吃蛇</h1>
-          <p className="intro">
-            方向键或 WASD 控制方向，按住空格加速。游戏记录会保存在当前浏览器中。
-          </p>
-        </div>
-        <a className="play-link" href="/game.html" target="_blank" rel="noreferrer">
-          全屏打开
-        </a>
-      </header>
+    <main className="home-shell">
+      <span className="orange orange-one" aria-hidden="true">🍊</span>
+      <span className="orange orange-two" aria-hidden="true">🍊</span>
+      <span className="orange orange-three" aria-hidden="true">🍊</span>
 
-      <iframe
-        className="game-frame"
-        src="/game.html"
-        title="噜噜立方体贪吃蛇"
-        allow="autoplay"
-      />
+      <section className="hero" aria-labelledby="game-title">
+        <div className="hero-copy">
+          <p className="eyebrow">LULU CUBE SNAKE</p>
+          <h1 id="game-title">贪吃噜</h1>
+          <p className="tagline">噜噜准备开饭啦！穿梭六面立方体，吃掉橘子，躲开障碍。</p>
+          <a className="start-button" href="/game.html">
+            <span>开始游戏</span>
+            <span aria-hidden="true">→</span>
+          </a>
+          <p className="controls">方向键 / WASD · 长按空格加速</p>
+        </div>
+
+        <div className="lulu-stage" aria-hidden="true">
+          <div className="sun-disc" />
+          <img src="/assets/lulu-eating-hd.png" alt="" />
+        </div>
+      </section>
     </main>
   );
 }
