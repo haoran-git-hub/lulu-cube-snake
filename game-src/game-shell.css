@@ -1,0 +1,139 @@
+:root {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #2b2118;
+  --card: #fffaf0;
+  --card-foreground: #2b2118;
+  --primary: #e8942f;
+  --primary-foreground: #ffffff;
+  --muted-foreground: #74675a;
+  --border: rgba(91, 67, 42, 0.16);
+  --input: rgba(91, 67, 42, 0.18);
+  --ring: #e8942f;
+  --font-size-base: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: #ffffff;
+  color: var(--foreground);
+  font-family: ui-rounded, "SF Pro Rounded", "PingFang SC", system-ui, sans-serif;
+  font-size: var(--font-size-base);
+}
+
+body {
+  padding: 18px;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.game-shell {
+  width: min(100%, 980px);
+  margin: 0 auto;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--card-foreground);
+  padding: 12px;
+  box-shadow: 0 8px 30px rgba(91, 67, 42, 0.08);
+}
+
+canvas.card {
+  padding: 0;
+  background: #ffffff;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--foreground);
+  min-height: 38px;
+  padding: 8px 13px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #fff4df;
+}
+
+.btn:focus-visible,
+.form-range:focus-visible,
+.form-control:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ring) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.btn-primary:hover {
+  background: #d9801d;
+}
+
+.viz-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  align-items: end;
+}
+
+.form-label {
+  display: grid;
+  gap: 5px;
+  color: var(--foreground);
+}
+
+.form-range {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.form-control-color {
+  width: 54px;
+  height: 36px;
+  padding: 3px;
+  border: 1px solid var(--input);
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.text-small {
+  font-size: 12px;
+}
+
+h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  body {
+    padding: 10px;
+  }
+
+  .viz-controls {
+    grid-template-columns: 1fr;
+  }
+}

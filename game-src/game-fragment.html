@@ -1,0 +1,1008 @@
+<div id="round-lulu-cube-snake-game">
+  <style>
+    #round-lulu-cube-snake-game {
+      color: var(--foreground);
+      display: grid;
+      gap: 12px;
+      width: 100%;
+    }
+    #round-lulu-cube-snake-game .cube-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    #round-lulu-cube-snake-game .cube-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 160px;
+      align-items: start;
+      gap: 14px;
+    }
+    #round-lulu-cube-snake-game .cube-stage {
+      min-width: 0;
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+    }
+    #round-lulu-cube-snake-game .cube-canvas {
+      box-sizing: border-box;
+      display: block;
+      width: 100%;
+      max-width: 620px;
+      aspect-ratio: 31 / 26;
+      touch-action: none;
+    }
+    #round-lulu-cube-snake-game .cube-pad {
+      display: grid;
+      grid-template-columns: repeat(3, auto);
+      gap: 6px;
+      justify-content: center;
+    }
+    #round-lulu-cube-snake-game .cube-pad .up { grid-column: 2; }
+    #round-lulu-cube-snake-game .cube-pad .left { grid-column: 1; grid-row: 2; }
+    #round-lulu-cube-snake-game .cube-pad .down { grid-column: 2; grid-row: 2; }
+    #round-lulu-cube-snake-game .cube-pad .right { grid-column: 3; grid-row: 2; }
+    #round-lulu-cube-snake-game .leaderboard-list {
+      margin: 8px 0 0;
+      padding-left: 24px;
+    }
+    #round-lulu-cube-snake-game .leaderboard-empty {
+      margin-top: 8px;
+    }
+    @media (max-width: 560px) {
+      #round-lulu-cube-snake-game .cube-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+
+  <div class="cube-status">
+    <span>得分：<strong id="cube-score">0</strong></span>
+    <span>最高：<strong id="cube-best">0</strong></span>
+    <span id="cube-star-status" class="text-muted">⭐ 开始后 15 秒</span>
+    <span id="cube-message" class="text-muted" aria-live="polite">方向键 / WASD，长按空格加速</span>
+    <button id="cube-restart" type="button" class="btn btn-primary">应用 / 重新开始</button>
+  </div>
+
+  <div class="viz-controls" aria-label="游戏初始设置">
+    <label class="form-label" for="setting-obstacles">初始障碍：<output id="setting-obstacles-value">5</output>
+      <input id="setting-obstacles" class="form-range" type="range" min="0" max="80" value="5">
+    </label>
+    <label class="form-label" for="setting-foods">常驻食物：<output id="setting-foods-value">10</output>
+      <input id="setting-foods" class="form-range" type="range" min="1" max="30" value="10">
+    </label>
+    <label class="form-label" for="setting-speed">初始速度：<output id="setting-speed-value">135 ms</output>
+      <input id="setting-speed" class="form-range" type="range" min="110" max="220" step="5" value="135">
+    </label>
+    <label class="form-label" for="setting-moving">移动障碍：<output id="setting-moving-value">3</output>
+      <input id="setting-moving" class="form-range" type="range" min="0" max="12" value="3">
+    </label>
+    <label class="form-label" for="setting-star-interval">星星出现间隔：<output id="setting-star-interval-value">15 秒</output>
+      <input id="setting-star-interval" class="form-range" type="range" min="10" max="90" step="5" value="15">
+    </label>
+    <label class="form-label" for="setting-color">身体颜色
+      <input id="setting-color" class="form-control form-control-color" type="color" value="#f4c842">
+    </label>
+  </div>
+  <div class="text-small text-muted">障碍、食物、速度、巡逻数量与星星间隔在“应用 / 重新开始”后生效；颜色会立即预览。</div>
+
+  <div class="cube-layout">
+    <div class="cube-stage">
+      <canvas id="cube-canvas" class="card cube-canvas" width="620" height="520" role="img" aria-label="以卡通人物噜噜为头部、橘子为食物的三维立方体贪吃蛇游戏"></canvas>
+      <div class="cube-pad" aria-label="方向控制">
+        <button type="button" class="btn up" data-dir="up" aria-label="向上">↑</button>
+        <button type="button" class="btn left" data-dir="left" aria-label="向左">←</button>
+        <button type="button" class="btn down" data-dir="down" aria-label="向下">↓</button>
+        <button type="button" class="btn right" data-dir="right" aria-label="向右">→</button>
+      </div>
+    </div>
+
+    <section class="card" aria-labelledby="cube-leaderboard-title">
+      <h3 id="cube-leaderboard-title">排行榜</h3>
+      <ol id="cube-leaderboard" class="leaderboard-list"></ol>
+      <div id="cube-leaderboard-empty" class="leaderboard-empty text-muted">暂无完成记录</div>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.getElementById('round-lulu-cube-snake-game');
+      const canvas = root.querySelector('#cube-canvas');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = root.querySelector('#cube-score');
+      const bestEl = root.querySelector('#cube-best');
+      const messageEl = root.querySelector('#cube-message');
+      const starStatusEl = root.querySelector('#cube-star-status');
+      const restartBtn = root.querySelector('#cube-restart');
+      const leaderboardEl = root.querySelector('#cube-leaderboard');
+      const leaderboardEmptyEl = root.querySelector('#cube-leaderboard-empty');
+      const obstacleInput = root.querySelector('#setting-obstacles');
+      const obstacleOutput = root.querySelector('#setting-obstacles-value');
+      const foodInput = root.querySelector('#setting-foods');
+      const foodOutput = root.querySelector('#setting-foods-value');
+      const speedInput = root.querySelector('#setting-speed');
+      const speedOutput = root.querySelector('#setting-speed-value');
+      const movingInput = root.querySelector('#setting-moving');
+      const movingOutput = root.querySelector('#setting-moving-value');
+      const starIntervalInput = root.querySelector('#setting-star-interval');
+      const starIntervalOutput = root.querySelector('#setting-star-interval-value');
+      const colorInput = root.querySelector('#setting-color');
+      const storageKey = 'codex-cube-snake-leaderboard-v1';
+      const size = 12;
+      const half = size / 2;
+      const boostSpeed = 90;
+      let baseSpeed = 135;
+      let foodTarget = 10;
+      let snakeColor = '#f4c842';
+      let starIntervalMs = 15000;
+
+      const vector = (x, y, z) => ({ x, y, z });
+      const add = (a, b) => vector(a.x + b.x, a.y + b.y, a.z + b.z);
+      const scale = (a, amount) => vector(a.x * amount, a.y * amount, a.z * amount);
+      const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+      const cross = (a, b) => vector(
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+      );
+      const magnitude = a => Math.hypot(a.x, a.y, a.z);
+      const normalize = a => {
+        const length = magnitude(a) || 1;
+        return scale(a, 1 / length);
+      };
+      const sameVector = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z;
+
+      const faces = {
+        front: { n: vector(0, 0, 1), r: vector(1, 0, 0), d: vector(0, 1, 0) },
+        back: { n: vector(0, 0, -1), r: vector(-1, 0, 0), d: vector(0, 1, 0) },
+        right: { n: vector(1, 0, 0), r: vector(0, 0, -1), d: vector(0, 1, 0) },
+        left: { n: vector(-1, 0, 0), r: vector(0, 0, 1), d: vector(0, 1, 0) },
+        top: { n: vector(0, -1, 0), r: vector(1, 0, 0), d: vector(0, 0, 1) },
+        bottom: { n: vector(0, 1, 0), r: vector(1, 0, 0), d: vector(0, 0, -1) }
+      };
+      const faceNames = Object.keys(faces);
+      const localDirections = {
+        up: { du: 0, dv: -1 },
+        down: { du: 0, dv: 1 },
+        left: { du: -1, dv: 0 },
+        right: { du: 1, dv: 0 }
+      };
+      const cameraTargets = {
+        front: { yaw: -0.35, pitch: 0.28 },
+        back: { yaw: Math.PI - 0.35, pitch: 0.28 },
+        right: { yaw: -Math.PI / 2 - 0.35, pitch: 0.28 },
+        left: { yaw: Math.PI / 2 - 0.35, pitch: 0.28 },
+        top: { yaw: -0.35, pitch: -Math.PI / 2 + 0.28 },
+        bottom: { yaw: -0.35, pitch: Math.PI / 2 - 0.28 }
+      };
+
+      let snake;
+      let foods;
+      let obstacles;
+      let movingObstacles;
+      let star;
+      let starExpiresAt;
+      let nextStarAt;
+      let direction;
+      let queuedDirection;
+      let running;
+      let ended;
+      let boosted;
+      let timer;
+      let patrolTimer;
+      let audioContext;
+      let lastStarStatus = '';
+      let camera = { yaw: cameraTargets.front.yaw, pitch: cameraTargets.front.pitch };
+      let cameraTarget = { ...cameraTargets.front };
+      let leaderboard = loadLeaderboard();
+
+      function loadLeaderboard() {
+        try {
+          const value = JSON.parse(localStorage.getItem(storageKey));
+          return {
+            best: Number.isFinite(value?.best) ? value.best : 0,
+            runs: Array.isArray(value?.runs) ? value.runs.filter(Number.isFinite).slice(0, 5) : []
+          };
+        } catch (error) {
+          return { best: 0, runs: [] };
+        }
+      }
+
+      function saveLeaderboard() {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(leaderboard));
+        } catch (error) {
+          // The game still works when persistent storage is unavailable.
+        }
+      }
+
+      function renderLeaderboard() {
+        bestEl.textContent = String(leaderboard.best);
+        leaderboardEl.replaceChildren();
+        leaderboard.runs.forEach(score => {
+          const item = document.createElement('li');
+          item.textContent = `${score} 分`;
+          leaderboardEl.appendChild(item);
+        });
+        leaderboardEmptyEl.hidden = leaderboard.runs.length > 0;
+      }
+
+      function updateBest(score) {
+        if (score <= leaderboard.best) return;
+        leaderboard.best = score;
+        saveLeaderboard();
+        renderLeaderboard();
+      }
+
+      function recordRun(score) {
+        if (score > 0) {
+          leaderboard.runs.push(score);
+          leaderboard.runs.sort((a, b) => b - a);
+          leaderboard.runs = leaderboard.runs.slice(0, 5);
+        }
+        leaderboard.best = Math.max(leaderboard.best, score);
+        saveLeaderboard();
+        renderLeaderboard();
+      }
+
+      function cellKey(cell) {
+        return `${cell.face}:${cell.u}:${cell.v}`;
+      }
+
+      function cellCenter(cell, lift = 0) {
+        const face = faces[cell.face];
+        const u = cell.u + 0.5 - half;
+        const v = cell.v + 0.5 - half;
+        return add(add(scale(face.n, half + lift), scale(face.r, u)), scale(face.d, v));
+      }
+
+      function reservedCellKeys() {
+        return new Set([
+          ...snake.map(cellKey),
+          ...foods.map(cellKey),
+          ...obstacles.map(cellKey),
+          ...(movingObstacles ? movingObstacles.flatMap(item => item.path.map(cellKey)) : []),
+          ...(star ? [cellKey(star)] : [])
+        ]);
+      }
+
+      function randomFreeCell() {
+        const occupied = reservedCellKeys();
+        const free = [];
+        faceNames.forEach(face => {
+          for (let v = 0; v < size; v += 1) {
+            for (let u = 0; u < size; u += 1) {
+              const cell = { face, u, v };
+              if (!occupied.has(cellKey(cell))) free.push(cell);
+            }
+          }
+        });
+        return free[Math.floor(Math.random() * free.length)];
+      }
+
+      function addObstacles(count) {
+        for (let i = 0; i < count; i += 1) {
+          const cell = randomFreeCell();
+          if (!cell) return;
+          obstacles.push(cell);
+        }
+      }
+
+      function replenishFoods() {
+        while (foods.length < foodTarget) {
+          const cell = randomFreeCell();
+          if (!cell) return;
+          foods.push(cell);
+        }
+      }
+
+      function createPatrolPath() {
+        for (let attempt = 0; attempt < 500; attempt += 1) {
+          const face = faceNames[Math.floor(Math.random() * faceNames.length)];
+          const horizontal = Math.random() < 0.5;
+          const length = 4 + Math.floor(Math.random() * 5);
+          const fixed = Math.floor(Math.random() * size);
+          const start = Math.floor(Math.random() * (size - length + 1));
+          const path = Array.from({ length }, (_, offset) => horizontal
+            ? { face, u: start + offset, v: fixed }
+            : { face, u: fixed, v: start + offset });
+          const occupied = reservedCellKeys();
+          if (path.every(cell => !occupied.has(cellKey(cell)))) return path;
+        }
+        return null;
+      }
+
+      function addMovingObstacles(count) {
+        for (let i = 0; i < count; i += 1) {
+          const path = createPatrolPath();
+          if (!path) return;
+          const route = [...path, ...path.slice(1, -1).reverse()];
+          movingObstacles.push({
+            path,
+            route,
+            index: Math.floor(Math.random() * route.length)
+          });
+        }
+      }
+
+      function movingObstacleCell(item) {
+        return item.route[item.index];
+      }
+
+      function movePatrols() {
+        if (!running || ended) return;
+        movingObstacles.forEach(item => {
+          item.index = (item.index + 1) % item.route.length;
+        });
+        const snakeKeys = new Set(snake.map(cellKey));
+        if (movingObstacles.some(item => snakeKeys.has(cellKey(movingObstacleCell(item))))) {
+          finish('被移动障碍撞到，游戏结束');
+        }
+      }
+
+      function spawnStar(now) {
+        const cell = randomFreeCell();
+        if (!cell) return;
+        star = cell;
+        starExpiresAt = now + 10000;
+      }
+
+      function ensureAudio() {
+        if (!audioContext) {
+          const AudioConstructor = window.AudioContext || window.webkitAudioContext;
+          if (AudioConstructor) audioContext = new AudioConstructor();
+        }
+        if (audioContext?.state === 'suspended') audioContext.resume();
+      }
+
+      function soundNote(frequency, start, duration, volume, type = 'sine') {
+        if (!audioContext) return;
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(volume, start + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start(start);
+        oscillator.stop(start + duration + 0.02);
+      }
+
+      function playDing(bright) {
+        ensureAudio();
+        if (!audioContext) return;
+        const now = audioContext.currentTime;
+        if (bright) {
+          soundNote(1046.5, now, 0.24, 0.12, 'sine');
+          soundNote(1568, now + 0.055, 0.28, 0.1, 'sine');
+          soundNote(2093, now + 0.11, 0.34, 0.08, 'triangle');
+        } else {
+          soundNote(880, now, 0.12, 0.075, 'sine');
+          soundNote(1320, now + 0.035, 0.16, 0.055, 'triangle');
+        }
+      }
+
+      function directionFromLocal(du, dv) {
+        if (du === 1) return { ...localDirections.right };
+        if (du === -1) return { ...localDirections.left };
+        if (dv === 1) return { ...localDirections.down };
+        return { ...localDirections.up };
+      }
+
+      function moveAcrossSurface(cell, movement) {
+        const u = cell.u + movement.du;
+        const v = cell.v + movement.dv;
+        if (u >= 0 && u < size && v >= 0 && v < size) {
+          return { cell: { face: cell.face, u, v }, direction: movement };
+        }
+
+        const currentFace = faces[cell.face];
+        const worldMovement = add(scale(currentFace.r, movement.du), scale(currentFace.d, movement.dv));
+        const nextFaceName = faceNames.find(name => sameVector(faces[name].n, worldMovement));
+        const nextFace = faces[nextFaceName];
+        const foldedMovement = scale(currentFace.n, -1);
+        const nextDu = Math.round(dot(foldedMovement, nextFace.r));
+        const nextDv = Math.round(dot(foldedMovement, nextFace.d));
+        const currentCenter = cellCenter(cell);
+        let nextU;
+        let nextV;
+
+        if (nextDu !== 0) {
+          nextU = nextDu === 1 ? 0 : size - 1;
+          nextV = Math.round(dot(currentCenter, nextFace.d) + half - 0.5);
+        } else {
+          nextV = nextDv === 1 ? 0 : size - 1;
+          nextU = Math.round(dot(currentCenter, nextFace.r) + half - 0.5);
+        }
+
+        return {
+          cell: { face: nextFaceName, u: nextU, v: nextV },
+          direction: directionFromLocal(nextDu, nextDv)
+        };
+      }
+
+      function normalizeAngle(value) {
+        while (value > Math.PI) value -= Math.PI * 2;
+        while (value < -Math.PI) value += Math.PI * 2;
+        return value;
+      }
+
+      function aimCameraAt(face) {
+        const target = cameraTargets[face];
+        cameraTarget = {
+          yaw: camera.yaw + normalizeAngle(target.yaw - camera.yaw),
+          pitch: target.pitch
+        };
+      }
+
+      function rotatePoint(point) {
+        const cy = Math.cos(camera.yaw);
+        const sy = Math.sin(camera.yaw);
+        const cp = Math.cos(camera.pitch);
+        const sp = Math.sin(camera.pitch);
+        const x = point.x * cy + point.z * sy;
+        const zAfterYaw = -point.x * sy + point.z * cy;
+        return {
+          x,
+          y: point.y * cp - zAfterYaw * sp,
+          z: point.y * sp + zAfterYaw * cp
+        };
+      }
+
+      function project(point) {
+        const rotated = rotatePoint(point);
+        const perspective = 27 / (27 - rotated.z);
+        const pixels = 22 * perspective;
+        return {
+          x: canvas.width / 2 + rotated.x * pixels,
+          y: canvas.height / 2 + rotated.y * pixels,
+          z: rotated.z,
+          scale: pixels
+        };
+      }
+
+      function faceCorners(faceName, lift = 0) {
+        const face = faces[faceName];
+        const center = scale(face.n, half + lift);
+        return [
+          add(add(center, scale(face.r, -half)), scale(face.d, -half)),
+          add(add(center, scale(face.r, half)), scale(face.d, -half)),
+          add(add(center, scale(face.r, half)), scale(face.d, half)),
+          add(add(center, scale(face.r, -half)), scale(face.d, half))
+        ];
+      }
+
+      function drawPolygon(points, fill, stroke, width = 1) {
+        const projected = points.map(project);
+        ctx.beginPath();
+        projected.forEach((point, index) => {
+          if (index === 0) ctx.moveTo(point.x, point.y);
+          else ctx.lineTo(point.x, point.y);
+        });
+        ctx.closePath();
+        if (fill) {
+          ctx.fillStyle = fill;
+          ctx.fill();
+        }
+        if (stroke) {
+          ctx.strokeStyle = stroke;
+          ctx.lineWidth = width;
+          ctx.stroke();
+        }
+      }
+
+      function visibleFaceEntries() {
+        return faceNames.map(name => {
+          const normal = rotatePoint(faces[name].n);
+          const corners = faceCorners(name);
+          const depth = corners.reduce((sum, point) => sum + rotatePoint(point).z, 0) / 4;
+          return { name, visible: normal.z > 0.02, depth };
+        }).filter(entry => entry.visible).sort((a, b) => a.depth - b.depth);
+      }
+
+      function drawCubeFace(faceName) {
+        const face = faces[faceName];
+        drawPolygon(faceCorners(faceName), '#ffffff', 'rgba(0,0,0,0.28)', 1.5);
+        ctx.strokeStyle = 'rgba(0,0,0,0.09)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i < size; i += 1) {
+          const offset = i - half;
+          const center = scale(face.n, half + 0.002);
+          const a1 = add(add(center, scale(face.r, offset)), scale(face.d, -half));
+          const a2 = add(add(center, scale(face.r, offset)), scale(face.d, half));
+          const b1 = add(add(center, scale(face.d, offset)), scale(face.r, -half));
+          const b2 = add(add(center, scale(face.d, offset)), scale(face.r, half));
+          const pa1 = project(a1);
+          const pa2 = project(a2);
+          const pb1 = project(b1);
+          const pb2 = project(b2);
+          ctx.beginPath();
+          ctx.moveTo(pa1.x, pa1.y);
+          ctx.lineTo(pa2.x, pa2.y);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(pb1.x, pb1.y);
+          ctx.lineTo(pb2.x, pb2.y);
+          ctx.stroke();
+        }
+      }
+
+      function blockPolygons(cell, height, inset) {
+        const face = faces[cell.face];
+        const center = cellCenter(cell, 0.02);
+        const radius = 0.5 - inset;
+        const bottom = [
+          add(add(center, scale(face.r, -radius)), scale(face.d, -radius)),
+          add(add(center, scale(face.r, radius)), scale(face.d, -radius)),
+          add(add(center, scale(face.r, radius)), scale(face.d, radius)),
+          add(add(center, scale(face.r, -radius)), scale(face.d, radius))
+        ];
+        const top = bottom.map(point => add(point, scale(face.n, height)));
+        return [
+          { points: top, shade: 0 },
+          { points: [bottom[0], bottom[1], top[1], top[0]], shade: 0.1 },
+          { points: [bottom[1], bottom[2], top[2], top[1]], shade: 0.18 },
+          { points: [bottom[2], bottom[3], top[3], top[2]], shade: 0.24 },
+          { points: [bottom[3], bottom[0], top[0], top[3]], shade: 0.14 }
+        ].map(polygon => ({
+          ...polygon,
+          depth: polygon.points.reduce((sum, point) => sum + rotatePoint(point).z, 0) / polygon.points.length
+        })).sort((a, b) => a.depth - b.depth);
+      }
+
+      function drawBlock(cell, color, height, inset) {
+        blockPolygons(cell, height, inset).forEach(polygon => {
+          drawPolygon(polygon.points, color, 'rgba(0,0,0,0.2)', 0.8);
+          if (polygon.shade > 0) drawPolygon(polygon.points, `rgba(0,0,0,${polygon.shade})`, null);
+        });
+      }
+
+      function shadeHex(hex, factor) {
+        const value = Number.parseInt(hex.slice(1), 16);
+        const red = Math.min(255, Math.max(0, Math.round(((value >> 16) & 255) * factor)));
+        const green = Math.min(255, Math.max(0, Math.round(((value >> 8) & 255) * factor)));
+        const blue = Math.min(255, Math.max(0, Math.round((value & 255) * factor)));
+        return `rgb(${red},${green},${blue})`;
+      }
+
+      function ellipsoidPoint(center, axes, radii, latitude, longitude) {
+        const cosLatitude = Math.cos(latitude);
+        return add(
+          add(
+            add(center, scale(axes.side, radii.side * cosLatitude * Math.cos(longitude))),
+            scale(axes.vertical, radii.vertical * Math.sin(latitude))
+          ),
+          scale(axes.front, radii.front * cosLatitude * Math.sin(longitude))
+        );
+      }
+
+      function drawEllipsoid(center, axes, radii, color, segments = 10, rings = 6) {
+        const polygons = [];
+        const light = normalize(vector(-0.45, -0.7, 1));
+        for (let ring = 0; ring < rings; ring += 1) {
+          const latitudeA = -Math.PI / 2 + ring * Math.PI / rings;
+          const latitudeB = -Math.PI / 2 + (ring + 1) * Math.PI / rings;
+          for (let segment = 0; segment < segments; segment += 1) {
+            const longitudeA = segment * Math.PI * 2 / segments;
+            const longitudeB = (segment + 1) * Math.PI * 2 / segments;
+            const points = [
+              ellipsoidPoint(center, axes, radii, latitudeA, longitudeA),
+              ellipsoidPoint(center, axes, radii, latitudeA, longitudeB),
+              ellipsoidPoint(center, axes, radii, latitudeB, longitudeB),
+              ellipsoidPoint(center, axes, radii, latitudeB, longitudeA)
+            ];
+            const midLatitude = (latitudeA + latitudeB) / 2;
+            const midLongitude = (longitudeA + longitudeB) / 2;
+            const normal = normalize(add(
+              add(
+                scale(axes.side, Math.cos(midLatitude) * Math.cos(midLongitude) / radii.side),
+                scale(axes.vertical, Math.sin(midLatitude) / radii.vertical)
+              ),
+              scale(axes.front, Math.cos(midLatitude) * Math.sin(midLongitude) / radii.front)
+            ));
+            const rotatedNormal = rotatePoint(normal);
+            const brightness = 0.58 + 0.48 * Math.max(0, dot(rotatedNormal, light));
+            polygons.push({
+              points,
+              fill: shadeHex(color, brightness),
+              depth: points.reduce((sum, point) => sum + rotatePoint(point).z, 0) / points.length
+            });
+          }
+        }
+        polygons.sort((a, b) => a.depth - b.depth).forEach(polygon => {
+          drawPolygon(polygon.points, polygon.fill, null);
+        });
+      }
+
+      function drawLuluHead(cell, movement) {
+        const surface = faces[cell.face];
+        const travel = normalize(add(
+          scale(surface.r, movement.du),
+          scale(surface.d, movement.dv)
+        ));
+        const front = normalize(add(scale(travel, 0.82), scale(surface.n, 0.57)));
+        const side = normalize(cross(front, surface.n));
+        const vertical = normalize(cross(side, front));
+        const axes = { side, vertical, front };
+        const center = cellCenter(cell, 0.68);
+
+        const leftEar = add(add(center, scale(side, -0.57)), scale(vertical, 0.2));
+        const rightEar = add(add(center, scale(side, 0.57)), scale(vertical, 0.2));
+        drawEllipsoid(leftEar, axes, { side: 0.18, vertical: 0.25, front: 0.18 }, '#efbd35', 8, 5);
+        drawEllipsoid(rightEar, axes, { side: 0.18, vertical: 0.25, front: 0.18 }, '#efbd35', 8, 5);
+
+        const orangeCap = add(center, scale(vertical, 0.66));
+        drawEllipsoid(orangeCap, axes, { side: 0.29, vertical: 0.23, front: 0.25 }, '#df9024', 9, 6);
+        const capLeaf = add(add(orangeCap, scale(vertical, 0.2)), scale(front, 0.02));
+        drawEllipsoid(capLeaf, axes, { side: 0.07, vertical: 0.17, front: 0.06 }, '#66813b', 7, 4);
+
+        drawEllipsoid(center, axes, { side: 0.67, vertical: 0.66, front: 0.62 }, '#f5ce47', 13, 8);
+
+        const muzzle = add(add(center, scale(front, 0.49)), scale(vertical, -0.1));
+        drawEllipsoid(muzzle, axes, { side: 0.57, vertical: 0.38, front: 0.32 }, '#ee9f2c', 12, 7);
+
+        [-1, 1].forEach(sideSign => {
+          const eye = add(
+            add(add(center, scale(front, 0.52)), scale(vertical, 0.2)),
+            scale(side, sideSign * 0.26)
+          );
+          drawEllipsoid(eye, axes, { side: 0.14, vertical: 0.18, front: 0.09 }, '#fffdf5', 9, 6);
+          const pupil = add(eye, scale(front, 0.085));
+          drawEllipsoid(pupil, axes, { side: 0.085, vertical: 0.12, front: 0.045 }, '#24201e', 8, 5);
+          const glint = add(add(pupil, scale(front, 0.045)), add(scale(vertical, 0.045), scale(side, -0.025)));
+          drawEllipsoid(glint, axes, { side: 0.026, vertical: 0.034, front: 0.018 }, '#ffffff', 6, 4);
+        });
+
+        const mouth = add(add(muzzle, scale(front, 0.3)), scale(vertical, -0.14));
+        drawEllipsoid(mouth, axes, { side: 0.17, vertical: 0.06, front: 0.035 }, '#211715', 8, 5);
+      }
+
+      function drawFood(cell) {
+        const center = project(cellCenter(cell, 0.48));
+        const radius = 0.32 * center.scale;
+        const gradient = ctx.createRadialGradient(
+          center.x - radius * 0.35,
+          center.y - radius * 0.35,
+          radius * 0.08,
+          center.x,
+          center.y,
+          radius
+        );
+        gradient.addColorStop(0, '#fff6bf');
+        gradient.addColorStop(0.28, '#ffbd20');
+        gradient.addColorStop(1, '#c86b00');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.strokeStyle = '#5f7137';
+        ctx.lineWidth = Math.max(1, radius * 0.12);
+        ctx.beginPath();
+        ctx.moveTo(center.x, center.y - radius * 0.72);
+        ctx.lineTo(center.x + radius * 0.08, center.y - radius * 1.08);
+        ctx.stroke();
+        ctx.fillStyle = '#779a43';
+        ctx.beginPath();
+        ctx.ellipse(
+          center.x + radius * 0.27,
+          center.y - radius * 0.94,
+          radius * 0.34,
+          radius * 0.15,
+          -0.45,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+
+      function drawStar(cell) {
+        const center = project(cellCenter(cell, 0.54));
+        const outer = 0.43 * center.scale;
+        const inner = outer * 0.43;
+        ctx.save();
+        ctx.translate(center.x + outer * 0.12, center.y + outer * 0.15);
+        ctx.fillStyle = '#b56a00';
+        ctx.beginPath();
+        for (let i = 0; i < 10; i += 1) {
+          const angle = -Math.PI / 2 + i * Math.PI / 5;
+          const radius = i % 2 === 0 ? outer : inner;
+          const x = Math.cos(angle) * radius;
+          const y = Math.sin(angle) * radius;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        const gradient = ctx.createRadialGradient(
+          center.x - outer * 0.25,
+          center.y - outer * 0.3,
+          outer * 0.08,
+          center.x,
+          center.y,
+          outer
+        );
+        gradient.addColorStop(0, '#fffbd1');
+        gradient.addColorStop(0.3, '#ffe54d');
+        gradient.addColorStop(1, '#f2a900');
+        ctx.fillStyle = gradient;
+        ctx.strokeStyle = '#b56a00';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 10; i += 1) {
+          const angle = -Math.PI / 2 + i * Math.PI / 5;
+          const radius = i % 2 === 0 ? outer : inner;
+          const x = center.x + Math.cos(angle) * radius;
+          const y = center.y + Math.sin(angle) * radius;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      function drawPatrolPaths(visibleFaces) {
+        ctx.strokeStyle = 'rgba(143,21,48,0.34)';
+        ctx.fillStyle = 'rgba(143,21,48,0.42)';
+        ctx.lineWidth = 2;
+        movingObstacles.forEach(item => {
+          if (!visibleFaces.has(item.path[0].face)) return;
+          const points = item.path.map(cell => project(cellCenter(cell, 0.035)));
+          ctx.beginPath();
+          points.forEach((point, index) => {
+            if (index === 0) ctx.moveTo(point.x, point.y);
+            else ctx.lineTo(point.x, point.y);
+          });
+          ctx.stroke();
+          [points[0], points[points.length - 1]].forEach(point => {
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        });
+      }
+
+      function drawScene() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const visible = visibleFaceEntries();
+        visible.forEach(entry => drawCubeFace(entry.name));
+        const visibleFaces = new Set(visible.map(entry => entry.name));
+        drawPatrolPaths(visibleFaces);
+        const entities = [];
+        obstacles.forEach(cell => entities.push({ type: 'obstacle', cell, depth: rotatePoint(cellCenter(cell, 0.4)).z }));
+        movingObstacles.forEach(item => {
+          const cell = movingObstacleCell(item);
+          entities.push({ type: 'moving-obstacle', cell, depth: rotatePoint(cellCenter(cell, 0.46)).z });
+        });
+        foods.forEach(cell => entities.push({ type: 'food', cell, depth: rotatePoint(cellCenter(cell, 0.48)).z }));
+        if (star) entities.push({ type: 'star', cell: star, depth: rotatePoint(cellCenter(star, 0.54)).z });
+        snake.forEach((cell, index) => entities.push({ type: index === 0 ? 'head' : 'body', cell, depth: rotatePoint(cellCenter(cell, 0.35)).z }));
+        entities.filter(entity => visibleFaces.has(entity.cell.face)).sort((a, b) => a.depth - b.depth).forEach(entity => {
+          if (entity.type === 'obstacle') drawBlock(entity.cell, '#df1f26', 0.72, 0.08);
+          else if (entity.type === 'moving-obstacle') drawBlock(entity.cell, '#8f1530', 0.82, 0.06);
+          else if (entity.type === 'food') drawFood(entity.cell);
+          else if (entity.type === 'star') drawStar(entity.cell);
+          else if (entity.type === 'head') drawLuluHead(entity.cell, direction);
+          else drawBlock(entity.cell, snakeColor, 0.42, 0.13);
+        });
+      }
+
+      function finish(reason) {
+        running = false;
+        ended = true;
+        boosted = false;
+        window.clearInterval(timer);
+        window.clearInterval(patrolTimer);
+        messageEl.textContent = reason;
+        recordRun(Number(scoreEl.textContent));
+        restartBtn.focus();
+      }
+
+      function tick() {
+        direction = queuedDirection;
+        const moved = moveAcrossSurface(snake[0], direction);
+        const head = moved.cell;
+        direction = moved.direction;
+        queuedDirection = moved.direction;
+        const headKey = cellKey(head);
+        const foodIndex = foods.findIndex(food => cellKey(food) === headKey);
+        const hitStar = Boolean(star && cellKey(star) === headKey);
+        const willEat = foodIndex !== -1 || hitStar;
+        const bodyToCheck = willEat ? snake : snake.slice(0, -1);
+        if (bodyToCheck.some(part => cellKey(part) === headKey)) {
+          finish('撞到自己，游戏结束');
+          return;
+        }
+        if (obstacles.some(obstacle => cellKey(obstacle) === headKey)) {
+          finish('撞到障碍，游戏结束');
+          return;
+        }
+        if (movingObstacles.some(item => cellKey(movingObstacleCell(item)) === headKey)) {
+          finish('撞到移动障碍，游戏结束');
+          return;
+        }
+
+        snake.unshift(head);
+        if (willEat) {
+          const previousScore = Number(scoreEl.textContent);
+          if (foodIndex !== -1) {
+            foods.splice(foodIndex, 1);
+            playDing(false);
+          }
+          if (hitStar) {
+            star = null;
+            starExpiresAt = 0;
+            playDing(true);
+          }
+          const nextScore = previousScore + (hitStar ? 10 : 1);
+          scoreEl.textContent = String(nextScore);
+          updateBest(nextScore);
+          const newObstacles = Math.floor(nextScore / 3) - Math.floor(previousScore / 3);
+          if (newObstacles > 0) addObstacles(newObstacles);
+          replenishFoods();
+        } else {
+          snake.pop();
+        }
+        if (snake[1] && snake[1].face !== head.face) aimCameraAt(head.face);
+      }
+
+      function start() {
+        if (running || ended) return;
+        ensureAudio();
+        running = true;
+        messageEl.textContent = '游戏中';
+        if (!nextStarAt) nextStarAt = performance.now() + starIntervalMs;
+        restartMovementTimer();
+        window.clearInterval(patrolTimer);
+        patrolTimer = window.setInterval(movePatrols, 430);
+      }
+
+      function restartMovementTimer() {
+        window.clearInterval(timer);
+        if (running) timer = window.setInterval(tick, boosted ? boostSpeed : baseSpeed);
+      }
+
+      function setBoost(active) {
+        if (ended || boosted === active) return;
+        boosted = active;
+        restartMovementTimer();
+        if (running) messageEl.textContent = boosted ? '加速中' : '游戏中';
+      }
+
+      function setDirection(name) {
+        const next = localDirections[name];
+        if (!next || ended) return;
+        if (next.du + direction.du === 0 && next.dv + direction.dv === 0) return;
+        queuedDirection = { ...next };
+        start();
+      }
+
+      function reset() {
+        window.clearInterval(timer);
+        window.clearInterval(patrolTimer);
+        baseSpeed = Number(speedInput.value);
+        foodTarget = Number(foodInput.value);
+        snakeColor = colorInput.value;
+        starIntervalMs = Number(starIntervalInput.value) * 1000;
+        const initialObstacleCount = Number(obstacleInput.value);
+        const movingObstacleCount = Number(movingInput.value);
+        snake = [
+          { face: 'front', u: 6, v: 6 },
+          { face: 'front', u: 5, v: 6 },
+          { face: 'front', u: 4, v: 6 }
+        ];
+        foods = [];
+        obstacles = [];
+        movingObstacles = [];
+        star = null;
+        starExpiresAt = 0;
+        nextStarAt = null;
+        direction = { ...localDirections.right };
+        queuedDirection = { ...localDirections.right };
+        running = false;
+        ended = false;
+        boosted = false;
+        scoreEl.textContent = '0';
+        messageEl.textContent = '方向键 / WASD，长按空格加速';
+        starStatusEl.textContent = `⭐ 开始后 ${starIntervalMs / 1000} 秒`;
+        lastStarStatus = starStatusEl.textContent;
+        addObstacles(initialObstacleCount);
+        addMovingObstacles(movingObstacleCount);
+        replenishFoods();
+        cameraTarget = { ...cameraTargets.front };
+        aimCameraAt('front');
+      }
+
+      const keyMap = {
+        ArrowUp: 'up', w: 'up', W: 'up',
+        ArrowDown: 'down', s: 'down', S: 'down',
+        ArrowLeft: 'left', a: 'left', A: 'left',
+        ArrowRight: 'right', d: 'right', D: 'right'
+      };
+
+      function bindRange(input, output, suffix = '') {
+        input.addEventListener('input', () => {
+          output.textContent = `${input.value}${suffix}`;
+        });
+      }
+
+      bindRange(obstacleInput, obstacleOutput);
+      bindRange(foodInput, foodOutput);
+      bindRange(speedInput, speedOutput, ' ms');
+      bindRange(movingInput, movingOutput);
+      bindRange(starIntervalInput, starIntervalOutput, ' 秒');
+      colorInput.addEventListener('input', () => {
+        snakeColor = colorInput.value;
+      });
+
+      document.addEventListener('keydown', event => {
+        if (event.code === 'Space') {
+          event.preventDefault();
+          ensureAudio();
+          setBoost(true);
+          return;
+        }
+        const name = keyMap[event.key];
+        if (!name) return;
+        event.preventDefault();
+        setDirection(name);
+      });
+      document.addEventListener('keyup', event => {
+        if (event.code !== 'Space') return;
+        event.preventDefault();
+        setBoost(false);
+      });
+      window.addEventListener('blur', () => setBoost(false));
+      root.querySelectorAll('[data-dir]').forEach(button => {
+        button.addEventListener('click', () => {
+          ensureAudio();
+          setDirection(button.dataset.dir);
+        });
+      });
+      restartBtn.addEventListener('click', () => {
+        ensureAudio();
+        reset();
+      });
+
+      function animationFrame(timestamp) {
+        if (running) {
+          if (star && timestamp >= starExpiresAt) {
+            star = null;
+            starExpiresAt = 0;
+          }
+          if (nextStarAt && timestamp >= nextStarAt) {
+            if (!star) spawnStar(timestamp);
+            nextStarAt += starIntervalMs;
+          }
+          const seconds = star
+            ? Math.max(0, Math.ceil((starExpiresAt - timestamp) / 1000))
+            : Math.max(0, Math.ceil((nextStarAt - timestamp) / 1000));
+          const status = star ? `⭐ 剩余 ${seconds} 秒` : `⭐ ${seconds} 秒后`;
+          if (status !== lastStarStatus) {
+            starStatusEl.textContent = status;
+            lastStarStatus = status;
+          }
+        }
+        camera.yaw += normalizeAngle(cameraTarget.yaw - camera.yaw) * 0.09;
+        camera.pitch += (cameraTarget.pitch - camera.pitch) * 0.09;
+        drawScene();
+        requestAnimationFrame(animationFrame);
+      }
+
+      renderLeaderboard();
+      reset();
+      requestAnimationFrame(animationFrame);
+    })();
+  </script>
+</div>
